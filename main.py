@@ -1,23 +1,19 @@
 from nba_api.stats.static import players
 from nba_api.stats.endpoints import playercareerstats
 from nba_api.stats.endpoints import playergamelog
+from nba_api.live.nba.endpoints import scoreboard
 import pandas as pd
 import json
 import os
 from google import genai
 from dotenv import load_dotenv
 from pathlib import Path
-from dotenv import dotenv_values
 from google.genai import types
-import time
 
-
-load_dotenv()
-print(os.getenv("GEMINI_API"))
 nba_player_name = "Jalen Williams"
 nba_players = players.find_players_by_full_name(f"{nba_player_name}")
 player_id = nba_players[0]["id"]
-print(player_id)
+print(f"{nba_player_name} id: {player_id}")
 
 file_path = "player_id.json"
 if os.path.exists(file_path):
@@ -38,8 +34,17 @@ print(df)
 
 gamelog = playergamelog.PlayerGameLog(player_id=player_id, season="2025-26")
 df1 = gamelog.get_data_frames()[0]
-#print(df1)
+print(df1)
 
+games = scoreboard.ScoreBoard()
+game_data = games.get_dict()
+for game in game_data['scoreboard']['games']:
+    print(f"{game['awayTeam']['teamName']} @ {game['homeTeam']['teamName']} - {game['gameStatusText']}")
+
+print(career.get_data_frames['VS_TEAM_NAME'])
+#if nba_player_name
+
+load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API"))
 
 response = client.models.generate_content(
