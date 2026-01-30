@@ -18,7 +18,7 @@ export default function App() {
       // FIX: Encode the name to handle spaces safely
       // "LeBron James" becomes "LeBron%20James"
       const encodedName = encodeURIComponent(name); 
-
+ 
       // Fetch data using the encoded name
       const response = await fetch(`https://nba-ai.onrender.com/player/${encodedName}`);
       

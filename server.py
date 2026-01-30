@@ -51,7 +51,7 @@ def get_player_stats(name: str):
         
         # Clean up data for the frontend
         recent_games = []
-        for index, row in df.head(5).iterrows():
+        for index, row in df.head(10).iterrows():
             recent_games.append({
                 "gameDate": row['GAME_DATE'],
                 "matchup": row['MATCHUP'],
@@ -95,7 +95,7 @@ def predict_performance(request: PredictionRequest):
     Here are the recent stats for {request.player_name}: {stats_text}
     
     Based on this trend, predict their stats for the next game.
-    Return ONLY a JSON object with these keys: pts, reb, ast, prediction_reasoning.
+    Return ONLY a JSON object with these keys: pts, ast, reb, fg3m prediction_reasoning.
     Do not use markdown formatting.
     """
     
