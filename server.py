@@ -16,8 +16,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173",
-                   "https://nba-analytics-blond.vercel.app/",
-                   "https://nba-ai.onrender.com/"], # Your React App URL
+                   "https://nba-analytics-blond.vercel.app"], # Your React App URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
