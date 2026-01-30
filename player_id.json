@@ -709,5 +709,14 @@
             "last_name": "Randle",
             "is_active": true
         }
+    ],
+    [
+        {
+            "id": 203944,
+            "full_name": "Julius Randle",
+            "first_name": "Julius",
+            "last_name": "Randle",
+            "is_active": true
+        }
     ]
 ]
