@@ -15,8 +15,12 @@ export default function App() {
   const fetchPlayer = async (name: string) => {
     setLoading(true);
     try {
-      // Fetch data from your local Python backend
-      const response = await fetch(`http://127.0.0.1:8000/player/${name}`);
+      // FIX: Encode the name to handle spaces safely
+      // "LeBron James" becomes "LeBron%20James"
+      const encodedName = encodeURIComponent(name); 
+
+      // Fetch data using the encoded name
+      const response = await fetch(`https://nba-ai.onrender.com/player/${encodedName}`);
       
       if (!response.ok) {
         throw new Error('Player not found');
