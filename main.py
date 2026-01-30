@@ -10,10 +10,10 @@ from dotenv import load_dotenv
 from pathlib import Path
 from google.genai import types
 
-nba_player_name = "Jalen Williams"
+nba_player_name = "Julius Randle"
 nba_players = players.find_players_by_full_name(f"{nba_player_name}")
 player_id = nba_players[0]["id"]
-print(f"{nba_player_name} id: {player_id}")
+#print(f"{nba_player_name} id: {player_id}")
 
 file_path = "player_id.json"
 if os.path.exists(file_path):
@@ -30,19 +30,22 @@ with open(file_path, "w", encoding="utf-8") as file:
 
 career = playercareerstats.PlayerCareerStats(player_id=player_id)   
 df = career.get_data_frames()
-print(df)    
+#print(df)
+
+pd.set_option('display.max_rows', None) 
+pd.set_option('display.max_columns', None)    
 
 gamelog = playergamelog.PlayerGameLog(player_id=player_id, season="2025-26")
 df1 = gamelog.get_data_frames()[0]
-print(df1)
+print(df1[['GAME_DATE', 'MATCHUP', 'WL','MIN', 'FG_PCT', 'FG3M', 'FG3A', 'FG3_PCT', 'PTS', 'AST', 'REB', 'STL', 'BLK', 'OREB', 'DREB']])
 
-games = scoreboard.ScoreBoard()
+"""games = scoreboard.ScoreBoard()
 game_data = games.get_dict()
 for game in game_data['scoreboard']['games']:
-    print(f"{game['awayTeam']['teamName']} @ {game['homeTeam']['teamName']} - {game['gameStatusText']}")
+    #print(f"{game['awayTeam']['teamName']} @ {game['homeTeam']['teamName']} - {game['gameStatusText']}")
+    #print(game['awayTeam'])
+#print(career.get_data_frames['VS_TEAM_NAME'])"""
 
-print(career.get_data_frames['VS_TEAM_NAME'])
-#if nba_player_name
 
 load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API"))
@@ -54,6 +57,8 @@ response = client.models.generate_content(
               f"calculate the ppg and predict what the number of points in the next game would be"
               f"The numbers in AST column in {df1} are the number of assists made by nba player, {nba_player_name} from most recent game to the last"
               f"calculate the apg and predict what the number of assists in the next game would be"
+              f"The numbers in REB column in {df1} are the number of rebounds made by nba player, {nba_player_name} from most recent game to the last"
+              f"calculate the rpg and predict what the number of rebounds in the next game would be"
               ],
     config=types.GenerateContentConfig(
         system_instruction="You are a professional NBA analyst ."     
