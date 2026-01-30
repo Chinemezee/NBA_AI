@@ -15,7 +15,9 @@ app = FastAPI()
 # 2. Allow your React App to talk to this Server (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # Your React App URL
+    allow_origins=["http://localhost:5173",
+                   "https://nba-analytics-blond.vercel.app/",
+                   "https://nba-ai.onrender.com/"], # Your React App URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -55,7 +57,7 @@ def get_player_stats(name: str):
                 "gameDate": row['GAME_DATE'],
                 "matchup": row['MATCHUP'],
                 "wl": row['WL'],
-                "min": int(row['MIN']),
+                "min": int(float(row['MIN'])),
                 "pts": int(row['PTS']),
                 "ast": int(row['AST']),
                 "reb": int(row['REB']),
@@ -99,7 +101,7 @@ def predict_performance(request: PredictionRequest):
     """
     
     response = client.models.generate_content(
-        model="gemini-3.0-flash-preview",
+        model="gemini-2.0-flash-exp",
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json"
