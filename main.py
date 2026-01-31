@@ -9,7 +9,7 @@ from google import genai
 from dotenv import load_dotenv
 from pathlib import Path
 from google.genai import types
-
+ #owfjuowefjoewjfoejkfojfo
 nba_player_name = "Julius Randle"
 nba_players = players.find_players_by_full_name(f"{nba_player_name}")
 player_id = nba_players[0]["id"]
