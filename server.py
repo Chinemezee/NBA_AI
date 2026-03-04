@@ -8,7 +8,11 @@ from google.genai import types
 from dotenv import load_dotenv
 import os
 import pandas as pd
+import requests
+from nba_api.stats.library.http import NBAStatsHTTP
 
+
+os.environ['CURL_CA_BUNDLE'] = ""
 # 1. Initialize the App (This is the "app" variable uvicorn is looking for!)
 app = FastAPI()
 
@@ -21,6 +25,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+SCRAPER_API_KEY = 'b932c8580723c23b15c9a192d7ee104e'
+proxy_url = f"http://scraperapi:{SCRAPER_API_KEY}@proxy-server.scraperapi.com:8001"
+# NBA API usually requires these specific headers to avoid timeouts/blocks
+custom_headers = {
+    'Host': 'stats.nba.com',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Referer': 'https://www.nba.com/',
+    'Origin': 'https://www.nba.com',
+    'Connection': 'keep-alive',
+}
+# Create session
+session = requests.Session()
+
+# Attach proxy
+session.proxies = {
+    "http": proxy_url,
+    "https": proxy_url
+}
+
+# Attach required NBA headers
+session.headers.update(custom_headers)
+
+# Inject session into nba_api
+NBAStatsHTTP._session = session
+
 
 # Load environment variables
 load_dotenv()
@@ -46,7 +77,9 @@ def get_player_stats(name: str):
         player_id = nba_players[0]["id"]
         
         # Get Game Log
-        gamelog = playergamelog.PlayerGameLog(player_id=player_id, season="2025-26")
+        gamelog = playergamelog.PlayerGameLog(player_id=player_id,
+                                              season="2025-26",
+                                              timeout = 60)
         df = gamelog.get_data_frames()[0]
         
         # Clean up data for the frontend
