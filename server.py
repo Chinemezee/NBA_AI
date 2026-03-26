@@ -48,6 +48,9 @@ def get_player_stats(name: str):
         if nba_players.empty:
             raise HTTPException(status_code=404, detail="Player not found")
 
+        nba_players['GAME_DATE'] = pd.to_datetime(nba_players['GAME_DATE'])
+        nba_players = nba_players.sort_values(by='GAME_DATE', ascending=False)
+
         nba_players = nba_players.fillna(0)
         
         player_id = int(nba_players.iloc[0]["PLAYER_ID"])
