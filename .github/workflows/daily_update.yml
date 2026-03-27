@@ -25,6 +25,8 @@ jobs:
           pip install pandas requests nba_api # Add any other libraries your script uses
 
       - name: Run Stat Updater Script
+        env: # <--- ADD THIS BLOCK
+          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
         run: python append_csvdata.py # Make sure this matches your exact file name
 
       - name: Commit and Push Updated CSV
