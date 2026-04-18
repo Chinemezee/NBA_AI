@@ -1,2 +1,6 @@
 .env
 node_modules
+create_data.py
+.vscode
+player_id.json
+__pycache__
