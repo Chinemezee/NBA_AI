@@ -13,20 +13,19 @@ from nba_api.stats.library.http import NBAStatsHTTP
 
 
 # 1. Initialize the App (This is the "app" variable uvicorn is looking for!)
+load_dotenv()
 app = FastAPI()
 
 # 2. Allow your React App to talk to this Server (CORS)
+_allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173",
-                   "https://nba-analytics-blond.vercel.app"], # Your React App URL
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Load environment variables
-load_dotenv()
 # Initialize Gemini Client
 client = genai.Client(api_key=os.getenv("GEMINI_API"))
 
