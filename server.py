@@ -65,7 +65,7 @@ def get_player_stats(name: str):
         recent_games = []
         for index, row in nba_players.head(10).iterrows():
             recent_games.append({
-                "gameDate": row['GAME_DATE'],
+                "gameDate": row['GAME_DATE'].strftime('%Y-%m-%d'),
                 "matchup": row['MATCHUP'],
                 "wl": row['WL'],
                 "min": float(row['MIN']),
@@ -82,33 +82,19 @@ def get_player_stats(name: str):
                 "dreb": int(row['DREB'])
             })
 
-        all_games = []
-        for index, row in nba_players.iterrows():
-            all_games.append({
-                "gameDate": row['GAME_DATE'],
-                "matchup": row['MATCHUP'],
-                "wl": row['WL'],
-                "min": float(row['MIN']),
-                "pts": int(row['PTS']),
-                "ast": int(row['AST']),
-                "reb": int(row['REB']),
-                "fgPct": float(row['FG_PCT']),
-                "fg3m": int(row['FG3M']),
-                "fg3a": int(row['FG3A']),
-                "fg3Pct": float(row['FG3_PCT']),
-                "stl": int(row['STL']),
-                "blk": int(row['BLK']),
-                "oreb": int(row['OREB']),
-                "dreb": int(row['DREB'])
-            })
-            
+        season_avg = {
+            "pts": round(float(nba_players["PTS"].mean()), 1),
+            "reb": round(float(nba_players["REB"].mean()), 1),
+            "ast": round(float(nba_players["AST"].mean()), 1),
+        }
+
         return {
             "id": player_id,
             "name": nba_players.iloc[0]["PLAYER_NAME"],
             "team": "NBA",
             "position": "Player",
             "recentGames": recent_games,
-            "allGames": all_games
+            "seasonAvg": season_avg,
         }
 
     except Exception as e:

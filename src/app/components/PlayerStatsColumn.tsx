@@ -1,4 +1,4 @@
-import { User, ChevronRight, Search } from 'lucide-react';
+import { User, ChevronRight } from 'lucide-react';
 
 type Player = {
   id: number;
@@ -22,24 +22,7 @@ type Player = {
     oreb: number;
     dreb: number;
   }>;
-  // We add allGames here so the frontend knows to expect it
-  allGames?: Array<{
-    gameDate: string;
-    matchup: string;
-    wl: string;
-    min: number;
-    fgPct: number;
-    fg3m: number;
-    fg3a: number;
-    fg3Pct: number;
-    pts: number;
-    ast: number;
-    reb: number;
-    stl: number;
-    blk: number;
-    oreb: number;
-    dreb: number;
-  }>;
+  seasonAvg?: { pts: number; reb: number; ast: number };
 };
 
 type PlayerStatsColumnProps = {
@@ -50,14 +33,13 @@ type PlayerStatsColumnProps = {
   onSearchChange: (query: string) => void;
 };
 
-export function PlayerStatsColumn({ 
-  players, 
-  selectedPlayer, 
+export function PlayerStatsColumn({
+  players,
+  selectedPlayer,
   onSelectPlayer
 }: PlayerStatsColumnProps) {
-  
-  // Notice this now accepts a specific array of games, not the whole player!
-  const calculateAverages = (games: any[] | undefined) => {
+
+  const recentAverages = (games: Player['recentGames']) => {
     if (!games || games.length === 0) return { pts: 0, reb: 0, ast: 0 };
     const pts = games.reduce((sum, g) => sum + g.pts, 0) / games.length;
     const reb = games.reduce((sum, g) => sum + g.reb, 0) / games.length;
@@ -80,8 +62,7 @@ export function PlayerStatsColumn({
             </div>
           ) : (
             players.map((player) => {
-              // We pass ONLY the recent 10 games into the math function
-              const averages = calculateAverages(player.recentGames);
+              const averages = recentAverages(player.recentGames);
               return (
                 <button
                   key={`recent-${player.id}`}
@@ -138,8 +119,7 @@ export function PlayerStatsColumn({
             </div>
           ) : (
             players.map((player) => {
-              // We pass ALL games into the math function here
-              const averages = calculateAverages(player.allGames);
+              const averages = player.seasonAvg ?? { pts: 0, reb: 0, ast: 0 };
               return (
                 <button
                   key={`season-${player.id}`} 
