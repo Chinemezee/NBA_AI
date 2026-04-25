@@ -3,7 +3,7 @@ import time
 from nba_api.stats.endpoints import LeagueGameLog
 
 load_df = pd.read_csv("nba_player_game_logs.csv")
-game_date = load_df["GAME_DATE"].max()
+game_date = pd.to_datetime(load_df["GAME_DATE"].max()).strftime('%m/%d/%Y')
 
 # Full browser-like headers that NBA stats API expects
 custom_headers = {

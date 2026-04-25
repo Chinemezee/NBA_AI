@@ -6,6 +6,7 @@ type TeamGame = {
   matchup: string;
   wl: string;
   pts: number;
+  oppScore: number;
   ast: number;
   reb: number;
   oreb: number;
@@ -35,7 +36,6 @@ type TeamPrediction = {
   ast_predicted: number; ast_low: number; ast_high: number;
   reb_predicted: number; reb_low: number; reb_high: number;
   fg3m_predicted: number; fg3m_low: number; fg3m_high: number;
-  tov_predicted: number; tov_low: number; tov_high: number;
   fgPct_predicted: number;
 };
 
@@ -44,7 +44,6 @@ const EMPTY: TeamPrediction = {
   ast_predicted: 0, ast_low: 0, ast_high: 0,
   reb_predicted: 0, reb_low: 0, reb_high: 0,
   fg3m_predicted: 0, fg3m_low: 0, fg3m_high: 0,
-  tov_predicted: 0, tov_low: 0, tov_high: 0,
   fgPct_predicted: 0,
 };
 
@@ -92,7 +91,6 @@ export function TeamPrediction({ team }: { team: Team }) {
         ast_predicted: p.ast_predicted ?? 0, ast_low: p.ast_low ?? 0, ast_high: p.ast_high ?? 0,
         reb_predicted: p.reb_predicted ?? 0, reb_low: p.reb_low ?? 0, reb_high: p.reb_high ?? 0,
         fg3m_predicted: p.fg3m_predicted ?? 0, fg3m_low: p.fg3m_low ?? 0, fg3m_high: p.fg3m_high ?? 0,
-        tov_predicted: p.tov_predicted ?? 0, tov_low: p.tov_low ?? 0, tov_high: p.tov_high ?? 0,
         fgPct_predicted: p.fgPct_predicted ?? 0,
       });
       setReason(p.prediction_reasoning ?? 'No reasoning provided.');
@@ -136,6 +134,7 @@ export function TeamPrediction({ team }: { team: Team }) {
                 <th className="px-3 py-3 text-left text-xs text-gray-400">MATCHUP</th>
                 <th className="px-3 py-3 text-center text-xs text-gray-400">W/L</th>
                 <th className="px-3 py-3 text-center text-xs text-gray-400">PTS</th>
+                <th className="px-3 py-3 text-center text-xs text-gray-400">OPP</th>
                 <th className="px-3 py-3 text-center text-xs text-gray-400">AST</th>
                 <th className="px-3 py-3 text-center text-xs text-gray-400">REB</th>
                 <th className="px-3 py-3 text-center text-xs text-gray-400">OREB</th>
@@ -163,6 +162,7 @@ export function TeamPrediction({ team }: { team: Team }) {
                     }`}>{game.wl}</span>
                   </td>
                   <td className="px-3 py-3 text-center text-white font-medium">{game.pts}</td>
+                  <td className="px-3 py-3 text-center text-gray-400">{game.oppScore}</td>
                   <td className="px-3 py-3 text-center text-white">{game.ast}</td>
                   <td className="px-3 py-3 text-center text-white">{game.reb}</td>
                   <td className="px-3 py-3 text-center text-gray-300">{game.oreb}</td>
@@ -206,12 +206,11 @@ export function TeamPrediction({ team }: { team: Team }) {
           </button>
         </div>
         <div className="p-6">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <StatCard label="PTS"  predicted={prediction.pts_predicted}  low={prediction.pts_low}  high={prediction.pts_high} />
             <StatCard label="AST"  predicted={prediction.ast_predicted}  low={prediction.ast_low}  high={prediction.ast_high} />
             <StatCard label="REB"  predicted={prediction.reb_predicted}  low={prediction.reb_low}  high={prediction.reb_high} />
             <StatCard label="FG3M" predicted={prediction.fg3m_predicted} low={prediction.fg3m_low} high={prediction.fg3m_high} />
-            <StatCard label="TOV"  predicted={prediction.tov_predicted}  low={prediction.tov_low}  high={prediction.tov_high} />
             <StatCard
               label="FG%"
               predicted={prediction.fgPct_predicted}

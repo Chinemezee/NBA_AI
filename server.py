@@ -283,7 +283,7 @@ def _resolve_team_abbr(name: str) -> str | None:
     return _TEAM_SEARCH.get(name.strip().lower())
 
 
-def _build_team_game(group) -> dict:
+def _build_team_game(group, opp_score: int) -> dict:
     game_date = group['GAME_DATE'].iloc[0]
     matchup = str(group['MATCHUP'].iloc[0])
     wl = str(group['WL'].iloc[0])
@@ -317,7 +317,8 @@ def _build_team_game(group) -> dict:
     return {
         "gameDate": game_date.strftime('%Y-%m-%d') if hasattr(game_date, 'strftime') else str(game_date)[:10],
         "matchup": matchup, "wl": wl,
-        "pts": pts, "ast": ast, "reb": reb,
+        "pts": pts, "oppScore": opp_score,
+        "ast": ast, "reb": reb,
         "oreb": oreb, "dreb": dreb, "stl": stl, "blk": blk,
         "fg3m": fg3m, "fg3a": fg3a, "fg3Pct": fg3_pct,
         "fgPct": fg_pct, "ftm": ftm, "fta": fta, "ftPct": ft_pct,
@@ -341,7 +342,11 @@ def get_team_stats(name: str):
 
         games = []
         for game_id, group in team_df.groupby('GAME_ID'):
-            g = _build_team_game(group)
+            opp_score = int(
+                nba_data_df[(nba_data_df['GAME_ID'] == game_id) &
+                             (nba_data_df['TEAM_ABBREVIATION'] != abbr)]['PTS'].fillna(0).sum()
+            )
+            g = _build_team_game(group, opp_score)
             g['_sort'] = group['GAME_DATE'].iloc[0]
             games.append(g)
 
@@ -390,7 +395,11 @@ def predict_team_performance(request: TeamPredictionRequest):
 
     games = []
     for game_id, group in team_df.groupby('GAME_ID'):
-        g = _build_team_game(group)
+        opp_score = int(
+            nba_data_df[(nba_data_df['GAME_ID'] == game_id) &
+                         (nba_data_df['TEAM_ABBREVIATION'] != abbr)]['PTS'].fillna(0).sum()
+        )
+        g = _build_team_game(group, opp_score)
         g['_sort'] = group['GAME_DATE'].iloc[0]
         games.append(g)
 
@@ -412,7 +421,6 @@ def predict_team_performance(request: TeamPredictionRequest):
     l5_pts  = tavg(last_5, 'pts');  l5_ast = tavg(last_5, 'ast')
     l5_reb  = tavg(last_5, 'reb');  l5_fg3m = tavg(last_5, 'fg3m')
     l5_stl  = tavg(last_5, 'stl');  l5_blk = tavg(last_5, 'blk')
-    l5_tov  = tavg(last_5, 'tov')  if HAS_TOV else None
     l5_fg3a = tavg(last_5, 'fg3a'); l5_ftm = tavg(last_5, 'ftm')
     l5_fta  = tavg(last_5, 'fta')
     l5_fgpct = tavg(last_5, 'fgPct'); l5_fg3pct = tavg(last_5, 'fg3Pct')
@@ -429,7 +437,6 @@ def predict_team_performance(request: TeamPredictionRequest):
 
     location = "HOME" if 'vs.' in games[0].get('matchup', '') else "AWAY"
     wins = [g.get('wl', '') for g in last_5].count('W')
-    tov_line = f"TOV (last 5 avg): {l5_tov}  |  " if HAS_TOV and l5_tov is not None else ""
 
     last_3_lines = "\n".join([
         f"  {g['gameDate']} | {g.get('matchup','')} | {g.get('wl','')} | "
@@ -449,7 +456,7 @@ GAMES IN DATASET: {len(games)}
 --- LAST 5 GAMES AVERAGES ---
 PTS: {l5_pts}  |  AST: {l5_ast}  |  REB: {l5_reb}  |  FG3M: {l5_fg3m} / {l5_fg3a}
 STL: {l5_stl}  |  BLK: {l5_blk}  |  FG%: {l5_fgpct:.1%}  |  3P%: {l5_fg3pct:.1%}
-FTM/FTA: {l5_ftm}/{l5_fta}  |  {tov_line}W-L last 5: {wins}-{5-wins}
+FTM/FTA: {l5_ftm}/{l5_fta}  |  W-L last 5: {wins}-{5-wins}
 
 --- SEASON AVERAGES ({len(games)} games) ---
 PTS: {s_pts}  |  AST: {s_ast}  |  REB: {s_reb}  |  FG3M: {s_fg3m}  |  FG%: {s_fgpct:.1%}
@@ -472,7 +479,6 @@ Return ONLY a valid JSON object with exactly these keys:
   ast_predicted, ast_low, ast_high,
   reb_predicted, reb_low, reb_high,
   fg3m_predicted, fg3m_low, fg3m_high,
-  tov_predicted, tov_low, tov_high,
   fgPct_predicted,
   prediction_reasoning
 
