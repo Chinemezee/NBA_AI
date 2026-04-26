@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, TrendingUp } from 'lucide-react';
 import { PlayerPhoto } from './PlayerPhoto';
 
 type RosterPlayer = {
@@ -23,9 +23,10 @@ type Props = {
   abbr: string;
   onSelectPlayer: (name: string) => void;
   onBack: () => void;
+  onPredict: () => void;
 };
 
-export function TeamRoster({ abbr, onSelectPlayer, onBack }: Props) {
+export function TeamRoster({ abbr, onSelectPlayer, onBack, onPredict }: Props) {
   const [roster, setRoster] = useState<RosterData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -88,6 +89,23 @@ export function TeamRoster({ abbr, onSelectPlayer, onBack }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Team Prediction CTA */}
+      <button
+        onClick={onPredict}
+        className="w-full flex items-center justify-between bg-orange-500/10 border border-orange-500/30 hover:border-orange-500 hover:bg-orange-500/20 rounded-xl p-4 transition-all group"
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-orange-500/20 rounded-lg">
+            <TrendingUp className="size-5 text-orange-400" />
+          </div>
+          <div className="text-left">
+            <div className="text-white font-semibold">Check Team Prediction</div>
+            <div className="text-gray-400 text-sm">View recent stats & AI-powered prediction for next game</div>
+          </div>
+        </div>
+        <ArrowLeft className="size-5 text-orange-400 rotate-180 group-hover:translate-x-1 transition-transform" />
+      </button>
 
       {/* Player grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">

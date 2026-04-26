@@ -5,10 +5,11 @@ import { PlayerStatsColumn } from '@/app/components/PlayerStatsColumn';
 import { StatPrediction } from '@/app/components/StatPrediction';
 import { TeamsGrid } from '@/app/components/TeamsGrid';
 import { TeamRoster } from '@/app/components/TeamRoster';
+import { TeamPrediction } from '@/app/components/TeamPrediction';
 import { TrendingUp, Search, User, Shield, ArrowLeft } from 'lucide-react';
 
 type Mode = 'players' | 'teams';
-type TeamView = 'grid' | 'roster' | 'player';
+type TeamView = 'grid' | 'roster' | 'player' | 'prediction';
 
 export default function App() {
   const { user, signOut, loading: authLoading } = useAuth();
@@ -22,6 +23,7 @@ export default function App() {
   // Teams mode navigation
   const [teamView, setTeamView] = useState<TeamView>('grid');
   const [rosterAbbr, setRosterAbbr] = useState('');
+  const [teamData, setTeamData] = useState<any>(null);
 
   const [loading, setLoading] = useState(false);
 
@@ -79,6 +81,20 @@ export default function App() {
     }
   };
 
+  const fetchTeamAndPredict = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/team/${rosterAbbr}`);
+      if (!response.ok) throw new Error('Team not found');
+      const data = await response.json();
+      setTeamData(data);
+      setTeamView('prediction');
+    } catch (error) {
+      console.error('Failed to fetch team data:', error);
+    }
+    setLoading(false);
+  };
+
   const renderTeamsContent = () => {
     if (loading) {
       return (
@@ -106,7 +122,23 @@ export default function App() {
           abbr={rosterAbbr}
           onSelectPlayer={fetchPlayerFromRoster}
           onBack={() => setTeamView('grid')}
+          onPredict={fetchTeamAndPredict}
         />
+      );
+    }
+
+    if (teamView === 'prediction' && teamData) {
+      return (
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-400">
+          <button
+            onClick={() => setTeamView('roster')}
+            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm"
+          >
+            <ArrowLeft className="size-4" />
+            Back to roster
+          </button>
+          <TeamPrediction team={teamData} />
+        </div>
       );
     }
 
