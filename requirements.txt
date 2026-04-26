@@ -46,4 +46,4 @@ tzdata==2025.3
 uriTemplate==4.2.0
 urllib3==2.5.0
 uvicorn
-websockets==15.0.1
+websockets==14.2
