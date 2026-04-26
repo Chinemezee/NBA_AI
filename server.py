@@ -23,6 +23,38 @@ app.add_middleware(
 
 client = genai.Client(api_key=os.getenv("GEMINI_API"))
 
+# ── Supabase client ──────────────────────────────────────────────────────────
+from supabase import create_client, Client as SupabaseClient
+
+_sb: SupabaseClient = create_client(
+    os.getenv("SUPABASE_URL", ""),
+    os.getenv("SUPABASE_SERVICE_KEY", ""),
+)
+
+_COLS = [
+    'PLAYER_ID','GAME_ID','GAME_DATE','PLAYER_NAME','TEAM_ABBREVIATION',
+    'MATCHUP','WL','MIN','PTS','AST','REB','STL','BLK','OREB','DREB',
+    'FG_PCT','FG3M','FG3A','FG3_PCT','FTM','FTA','TOV',
+]
+
+def _load_from_supabase() -> pd.DataFrame:
+    """Page through nba_player_game_logs and return a DataFrame with uppercase columns."""
+    rows, page, size = [], 0, 1000
+    while True:
+        resp = _sb.table('nba_player_game_logs').select('*').range(page * size, (page + 1) * size - 1).execute()
+        batch = resp.data
+        if not batch:
+            break
+        rows.extend(batch)
+        if len(batch) < size:
+            break
+        page += 1
+    if not rows:
+        return pd.DataFrame(columns=_COLS)
+    df = pd.DataFrame(rows)
+    df.columns = [c.upper() for c in df.columns]
+    return df
+
 
 class PredictionRequest(BaseModel):
     player_name: str
@@ -33,8 +65,94 @@ class TeamPredictionRequest(BaseModel):
     team_name: str
 
 
-nba_data_df = pd.read_csv('nba_player_game_logs.csv')
+# Load on startup — fall back to CSV for local dev if Supabase isn't configured
+try:
+    _sb_url = os.getenv("SUPABASE_URL", "")
+    if _sb_url:
+        print("Loading game logs from Supabase...")
+        nba_data_df = _load_from_supabase()
+        print(f"Loaded {len(nba_data_df)} rows from Supabase.")
+    else:
+        raise ValueError("SUPABASE_URL not set")
+except Exception as _e:
+    print(f"Supabase load failed ({_e}), falling back to CSV.")
+    nba_data_df = pd.read_csv('nba_player_game_logs.csv')
+
 HAS_TOV = 'TOV' in nba_data_df.columns
+
+
+def _refresh_player_data():
+    """Fetch new games from NBA API, upsert to Supabase, reload in-memory dataframe."""
+    global nba_data_df, HAS_TOV, _schedule_cache, _schedule_cache_day
+    print("[scheduler] Starting daily data refresh...")
+    _custom_headers = {
+        'Accept': '*/*',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Connection': 'keep-alive',
+        'Host': 'stats.nba.com',
+        'Origin': 'https://www.nba.com',
+        'Referer': 'https://www.nba.com/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'x-nba-stats-origin': 'stats',
+        'x-nba-stats-token': 'true',
+    }
+    try:
+        from nba_api.stats.endpoints import LeagueGameLog
+        from_date = pd.to_datetime(nba_data_df['GAME_DATE'].max()).strftime('%m/%d/%Y')
+
+        all_new = []
+        for s_type in ['Regular Season', 'PlayIn', 'Playoffs']:
+            for attempt in range(3):
+                try:
+                    time.sleep(3)
+                    logs = LeagueGameLog(
+                        date_from_nullable=from_date,
+                        season='2025-26',
+                        player_or_team_abbreviation='P',
+                        season_type_all_star=s_type,
+                        headers=_custom_headers,
+                        timeout=120,
+                    )
+                    df_new = logs.get_data_frames()[0]
+                    if not df_new.empty:
+                        all_new.append(df_new)
+                    break
+                except Exception as e:
+                    print(f"[scheduler] {s_type} attempt {attempt+1} failed: {e}")
+                    if attempt < 2:
+                        time.sleep(30)
+
+        if not all_new:
+            print("[scheduler] No new games found.")
+            return
+
+        fetched = pd.concat(all_new, ignore_index=True)
+        fetched = fetched[[c for c in _COLS if c in fetched.columns]]
+
+        # Upsert to Supabase in batches of 500
+        records = [
+            {k.lower(): (None if pd.isna(v) else v) for k, v in row.items()}
+            for row in fetched.to_dict('records')
+        ]
+        for i in range(0, len(records), 500):
+            _sb.table('nba_player_game_logs').upsert(records[i:i+500]).execute()
+
+        # Reload full dataframe from Supabase so memory is consistent
+        nba_data_df = _load_from_supabase()
+        HAS_TOV = 'TOV' in nba_data_df.columns
+        _schedule_cache = None
+        _schedule_cache_day = None
+        print(f"[scheduler] Refresh done. Total rows: {len(nba_data_df)}")
+
+    except Exception as e:
+        print(f"[scheduler] Refresh failed: {e}")
+
+
+from apscheduler.schedulers.background import BackgroundScheduler
+_scheduler = BackgroundScheduler(timezone='UTC')
+_scheduler.add_job(_refresh_player_data, 'cron', hour=9, minute=0)  # 9 AM UTC = ~4-5 AM ET
+_scheduler.start()
 
 _NBA_HEADERS = {
     'Accept': '*/*',
@@ -48,50 +166,93 @@ _NBA_HEADERS = {
     'x-nba-stats-token': 'true',
 }
 
+from datetime import date as _date
+
 _schedule_cache: pd.DataFrame | None = None
+_schedule_cache_day: str | None = None
 
 
 def _fetch_schedule() -> pd.DataFrame | None:
-    global _schedule_cache
-    if _schedule_cache is not None:
+    """Fetch full-season schedule via LeagueSchedule; refreshes once per day."""
+    global _schedule_cache, _schedule_cache_day
+    today_str = _date.today().isoformat()
+    if _schedule_cache is not None and _schedule_cache_day == today_str:
         return _schedule_cache
     try:
         from nba_api.stats.endpoints import LeagueSchedule
         time.sleep(1)
         sched = LeagueSchedule(league_id='00', season_year='2025-26', headers=_NBA_HEADERS)
         df = sched.get_data_frames()[0]
+        # Normalise to lowercase so column detection is case-insensitive
+        df.columns = [c.lower() for c in df.columns]
+        print(f"Schedule fetched: {len(df)} games. Columns: {df.columns.tolist()[:10]}")
         _schedule_cache = df
-        print(f"Schedule cached: {len(df)} games, columns: {df.columns.tolist()[:6]}...")
+        _schedule_cache_day = today_str
         return df
     except Exception as e:
-        print(f"Schedule fetch failed: {e}")
+        print(f"LeagueSchedule fetch failed: {e}")
         return None
 
 
-def _col(df: pd.DataFrame, *candidates: str) -> str | None:
-    for c in candidates:
-        if c in df.columns:
-            return c
-    return None
+def _parse_dates(series: pd.Series) -> pd.Series:
+    """Parse a date series, stripping timezone info and normalising to midnight."""
+    parsed = pd.to_datetime(series, errors='coerce', utc=False)
+    if parsed.dt.tz is not None:
+        parsed = parsed.dt.tz_localize(None)
+    return parsed.dt.normalize()
 
 
 def get_next_game(team_abbr: str) -> dict | None:
+    # ── 1. Try the live scoreboard first (covers today's games) ──────────────
+    try:
+        from nba_api.live.endpoints import scoreboard as live_sb
+        board = live_sb.ScoreBoard()
+        games = board.get_dict().get('scoreboard', {}).get('games', [])
+        today_str = _date.today().isoformat()
+        for g in games:
+            ht = g.get('homeTeam', {}).get('teamTricode', '')
+            at = g.get('awayTeam', {}).get('teamTricode', '')
+            if team_abbr in (ht, at):
+                is_home = ht == team_abbr
+                opponent = at if is_home else ht
+                game_time = g.get('gameTimeUTC', '')
+                return {
+                    "gameDate": today_str,
+                    "opponent": opponent,
+                    "homeAway": "HOME" if is_home else "AWAY",
+                    "matchup": f"{team_abbr} vs. {opponent}" if is_home else f"{team_abbr} @ {opponent}",
+                    "gameTimeUTC": game_time,
+                }
+    except Exception as e:
+        print(f"Live scoreboard lookup failed: {e}")
+
+    # ── 2. Fall back to full-season schedule ─────────────────────────────────
     df = _fetch_schedule()
     if df is None:
         return None
     try:
-        home_col  = _col(df, 'homeTeamAbbreviation', 'HOME_TEAM_ABBREVIATION')
-        away_col  = _col(df, 'awayTeamAbbreviation', 'VISITOR_TEAM_ABBREVIATION')
-        date_col  = _col(df, 'gameDateEst', 'GAME_DATE_EST', 'gameDateTimeEst')
+        cols = df.columns.tolist()
+
+        # Detect home/away abbreviation columns by keyword
+        home_col = next(
+            (c for c in cols if 'home' in c and ('abbr' in c or 'tricode' in c or 'abbreviation' in c)), None
+        )
+        away_col = next(
+            (c for c in cols if ('away' in c or 'visitor' in c) and ('abbr' in c or 'tricode' in c or 'abbreviation' in c)), None
+        )
+        date_col = next(
+            (c for c in cols if 'date' in c and 'game' in c), None
+        ) or next((c for c in cols if 'date' in c), None)
+
         if not all([home_col, away_col, date_col]):
-            print(f"Unexpected schedule columns: {df.columns.tolist()}")
+            print(f"Cannot find schedule columns. Available: {cols}")
             return None
 
-        today = pd.Timestamp.now().normalize()
-        dates = pd.to_datetime(df[date_col], utc=True).dt.tz_localize(None).dt.normalize()
-        future = df[(dates >= today) & (
-            (df[home_col] == team_abbr) | (df[away_col] == team_abbr)
-        )].copy()
+        today = pd.Timestamp(_date.today())
+        dates = _parse_dates(df[date_col])
+
+        mask = (dates >= today) & ((df[home_col] == team_abbr) | (df[away_col] == team_abbr))
+        future = df[mask].copy()
         future['_date'] = dates[future.index]
         future = future.sort_values('_date')
 
@@ -99,16 +260,15 @@ def get_next_game(team_abbr: str) -> dict | None:
             return None
 
         row = future.iloc[0]
-        is_home  = row[home_col] == team_abbr
-        opponent = row[away_col] if is_home else row[home_col]
+        is_home = row[home_col] == team_abbr
+        opponent = str(row[away_col] if is_home else row[home_col])
         game_date = row['_date'].strftime('%Y-%m-%d')
-        matchup   = f"{team_abbr} vs. {opponent}" if is_home else f"{team_abbr} @ {opponent}"
 
         return {
             "gameDate": game_date,
             "opponent": opponent,
             "homeAway": "HOME" if is_home else "AWAY",
-            "matchup":  matchup,
+            "matchup": f"{team_abbr} vs. {opponent}" if is_home else f"{team_abbr} @ {opponent}",
         }
     except Exception as e:
         print(f"Next game lookup failed for {team_abbr}: {e}")
@@ -126,6 +286,97 @@ ABBR_TO_FULL = {
     "POR": "Portland Trail Blazers", "SAC": "Sacramento Kings", "SAS": "San Antonio Spurs",
     "TOR": "Toronto Raptors", "UTA": "Utah Jazz", "WAS": "Washington Wizards",
 }
+
+TEAM_IDS = {
+    "ATL": 1610612737, "BOS": 1610612738, "BKN": 1610612751,
+    "CHA": 1610612766, "CHI": 1610612741, "CLE": 1610612739,
+    "DAL": 1610612742, "DEN": 1610612743, "DET": 1610612765,
+    "GSW": 1610612744, "HOU": 1610612745, "IND": 1610612754,
+    "LAC": 1610612746, "LAL": 1610612747, "MEM": 1610612763,
+    "MIA": 1610612748, "MIL": 1610612749, "MIN": 1610612750,
+    "NOP": 1610612740, "NYK": 1610612752, "OKC": 1610612760,
+    "ORL": 1610612753, "PHI": 1610612755, "PHX": 1610612756,
+    "POR": 1610612757, "SAC": 1610612758, "SAS": 1610612759,
+    "TOR": 1610612761, "UTA": 1610612762, "WAS": 1610612764,
+}
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "rows": len(nba_data_df)}
+
+
+@app.get("/teams")
+def get_all_teams():
+    teams = [
+        {
+            "abbr": abbr,
+            "name": ABBR_TO_FULL[abbr],
+            "teamId": team_id,
+            "logoUrl": f"https://cdn.nba.com/logos/nba/{team_id}/global/L/logo.svg",
+        }
+        for abbr, team_id in TEAM_IDS.items()
+    ]
+    return sorted(teams, key=lambda x: x["name"])
+
+
+@app.get("/team/{abbr}/roster")
+def get_team_roster(abbr: str):
+    abbr = abbr.upper()
+    team_id = TEAM_IDS.get(abbr)
+    if not team_id:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    try:
+        from nba_api.stats.endpoints import CommonTeamRoster
+        time.sleep(1)
+        roster = CommonTeamRoster(team_id=team_id, season='2025-26')
+        df = roster.get_data_frames()[0]
+
+        players = []
+        for _, row in df.iterrows():
+            players.append({
+                "id": int(row.get("PLAYER_ID", 0)),
+                "name": str(row.get("PLAYER", "")),
+                "number": str(row.get("NUM", "")).strip(),
+                "position": str(row.get("POSITION", "")).strip(),
+                "height": str(row.get("HEIGHT", "")).strip(),
+                "weight": str(row.get("WEIGHT", "")).strip(),
+            })
+
+        return {
+            "abbr": abbr,
+            "name": ABBR_TO_FULL.get(abbr, abbr),
+            "teamId": team_id,
+            "logoUrl": f"https://cdn.nba.com/logos/nba/{team_id}/global/L/logo.svg",
+            "players": players,
+        }
+
+    except Exception as e:
+        print(f"Roster fetch failed for {abbr}: {e}")
+        # Fallback: derive roster from CSV data
+        team_df = nba_data_df[nba_data_df['TEAM_ABBREVIATION'] == abbr]
+        if team_df.empty:
+            raise HTTPException(status_code=404, detail="No data found for team")
+        unique = team_df.drop_duplicates(subset=['PLAYER_ID'])
+        players = [
+            {
+                "id": int(row['PLAYER_ID']),
+                "name": str(row['PLAYER_NAME']),
+                "number": "",
+                "position": "",
+                "height": "",
+                "weight": "",
+            }
+            for _, row in unique.iterrows()
+        ]
+        return {
+            "abbr": abbr,
+            "name": ABBR_TO_FULL.get(abbr, abbr),
+            "teamId": team_id,
+            "logoUrl": f"https://cdn.nba.com/logos/nba/{team_id}/global/L/logo.svg",
+            "players": players,
+        }
 
 _TEAM_SEARCH = {
     "atlanta hawks": "ATL", "hawks": "ATL",
@@ -214,14 +465,45 @@ def get_player_stats(name: str):
         team_abbr = str(nba_players.iloc[0]["TEAM_ABBREVIATION"])
         next_game = get_next_game(team_abbr)
 
+        # Fetch real player profile via nba_api
+        profile: dict = {}
+        try:
+            from nba_api.stats.endpoints import CommonPlayerInfo
+            from datetime import date
+            time.sleep(0.6)
+            info = CommonPlayerInfo(player_id=player_id)
+            pi = info.get_data_frames()[0].iloc[0]
+            age = None
+            try:
+                bd = pd.to_datetime(str(pi.get('BIRTHDATE', '')))
+                today = date.today()
+                age = today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
+            except Exception:
+                pass
+            profile = {
+                "height":     str(pi.get('HEIGHT', '')).strip(),
+                "weight":     str(pi.get('WEIGHT', '')).strip(),
+                "position":   str(pi.get('POSITION', '')).strip(),
+                "jersey":     str(pi.get('JERSEY', '')).strip(),
+                "age":        age,
+                "experience": str(pi.get('SEASON_EXP', '')).strip(),
+            }
+        except Exception as pe:
+            print(f"Profile fetch failed for {player_id}: {pe}")
+
         return {
-            "id": player_id,
-            "name": nba_players.iloc[0]["PLAYER_NAME"],
-            "team": team_abbr,
-            "position": "Player",
+            "id":         player_id,
+            "name":       str(nba_players.iloc[0]["PLAYER_NAME"]),
+            "team":       team_abbr,
+            "position":   profile.get("position") or "—",
+            "height":     profile.get("height", ""),
+            "weight":     profile.get("weight", ""),
+            "jersey":     profile.get("jersey", ""),
+            "age":        profile.get("age"),
+            "experience": profile.get("experience", ""),
             "recentGames": recent_games,
-            "seasonAvg": season_avg,
-            "nextGame": next_game,
+            "seasonAvg":   season_avg,
+            "nextGame":    next_game,
         }
 
     except HTTPException:
@@ -358,7 +640,7 @@ Return ONLY a valid JSON object with exactly these keys:
   stl_predicted, blk_predicted,
   prediction_reasoning
 
-All numeric values must be numbers (not strings).
+All numeric values must be integers (whole numbers, no decimals).
 _low and _high values are your confidence range for that stat.
 prediction_reasoning must be 2-3 sentences explaining the key factors.
 Do not use markdown. Do not wrap in code blocks.
@@ -595,7 +877,7 @@ Return ONLY a valid JSON object with exactly these keys:
   fgPct_predicted,
   prediction_reasoning
 
-All numeric values must be numbers (not strings).
+pts_predicted, pts_low, pts_high, ast_predicted, ast_low, ast_high, reb_predicted, reb_low, reb_high, fg3m_predicted, fg3m_low, fg3m_high must all be integers (whole numbers, no decimals).
 fgPct_predicted is a decimal between 0 and 1 (e.g. 0.478).
 _low and _high values are your confidence range for that stat.
 prediction_reasoning must be 2-3 sentences explaining the key factors.

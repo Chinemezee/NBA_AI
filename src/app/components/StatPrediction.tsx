@@ -1,5 +1,6 @@
 import { Trophy, TrendingUp, Sparkles, Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { PlayerPhoto } from './PlayerPhoto';
 
 type Game = {
   gameDate: string;
@@ -34,6 +35,11 @@ type Player = {
   name: string;
   team: string;
   position: string;
+  height?: string;
+  weight?: string;
+  jersey?: string;
+  age?: number | null;
+  experience?: string;
   recentGames: Game[];
   nextGame?: NextGame | null;
 };
@@ -134,10 +140,40 @@ export function StatPrediction({ player }: StatPredictionProps) {
     <div className="space-y-6">
       {/* Player Header */}
       <div className="bg-gray-900 rounded-lg border border-gray-800 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl text-white mb-1">{player.name}</h2>
-            <p className="text-gray-400">{player.team} • {player.position}</p>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <PlayerPhoto playerId={player.id} name={player.name} size="lg" />
+            <div className="space-y-2">
+              <h2 className="text-2xl text-white">{player.name}</h2>
+              <p className="text-gray-400 text-sm">{player.team}{player.position ? ` • ${player.position}` : ''}</p>
+              <div className="flex flex-wrap gap-2">
+                {player.jersey && (
+                  <span className="bg-gray-800 text-orange-400 text-xs font-semibold px-2.5 py-1 rounded-full">
+                    #{player.jersey}
+                  </span>
+                )}
+                {player.height && (
+                  <span className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-full">
+                    {player.height}
+                  </span>
+                )}
+                {player.weight && (
+                  <span className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-full">
+                    {player.weight} lbs
+                  </span>
+                )}
+                {player.age != null && (
+                  <span className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-full">
+                    Age {player.age}
+                  </span>
+                )}
+                {player.experience && player.experience !== '0' && (
+                  <span className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-full">
+                    {player.experience} yr{player.experience === '1' ? '' : 's'} exp
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
           <div className="px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-lg text-right">
             <div className="text-xs text-orange-400 mb-0.5">Next Game</div>

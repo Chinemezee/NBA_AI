@@ -1,10 +1,16 @@
-import { User, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
+import { PlayerPhoto } from './PlayerPhoto';
 
 type Player = {
   id: number;
   name: string;
   team: string;
   position: string;
+  height?: string;
+  weight?: string;
+  jersey?: string;
+  age?: number | null;
+  experience?: string;
   recentGames: Array<{
     gameDate: string;
     matchup: string;
@@ -73,13 +79,11 @@ export function PlayerStatsColumn({
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
-                      <div className="size-10 rounded-full bg-gray-800 flex items-center justify-center">
-                        <User className="size-5 text-gray-400" />
-                      </div>
+                      <PlayerPhoto playerId={player.id} name={player.name} size="sm" />
                       <div>
                         <div className="text-white">{player.name}</div>
                         <div className="text-sm text-gray-400">
-                          {player.team} • {player.position}
+                          {player.team}{player.jersey ? ` • #${player.jersey}` : ''}{player.position && player.position !== '—' ? ` • ${player.position}` : ''}
                         </div>
                       </div>
                     </div>
@@ -130,13 +134,11 @@ export function PlayerStatsColumn({
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
-                      <div className="size-10 rounded-full bg-gray-800 flex items-center justify-center">
-                        <User className="size-5 text-gray-400" />
-                      </div>
+                      <PlayerPhoto playerId={player.id} name={player.name} size="sm" />
                       <div>
                         <div className="text-white">{player.name}</div>
                         <div className="text-sm text-gray-400">
-                          {player.team} • {player.position}
+                          {player.team}{player.jersey ? ` • #${player.jersey}` : ''}{player.position && player.position !== '—' ? ` • ${player.position}` : ''}
                         </div>
                       </div>
                     </div>

@@ -3,23 +3,26 @@ import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './components/AuthPage';
 import { PlayerStatsColumn } from '@/app/components/PlayerStatsColumn';
 import { StatPrediction } from '@/app/components/StatPrediction';
-import { TeamStatsColumn } from '@/app/components/TeamStatsColumn';
-import { TeamPrediction } from '@/app/components/TeamPrediction';
-import { TrendingUp, Search, BarChart3, User, Shield } from 'lucide-react';
+import { TeamsGrid } from '@/app/components/TeamsGrid';
+import { TeamRoster } from '@/app/components/TeamRoster';
+import { TrendingUp, Search, User, Shield, ArrowLeft } from 'lucide-react';
 
 type Mode = 'players' | 'teams';
+type TeamView = 'grid' | 'roster' | 'player';
 
 export default function App() {
   const { user, signOut, loading: authLoading } = useAuth();
   const [mode, setMode] = useState<Mode>('players');
 
+  // Players mode
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
   const [players, setPlayers] = useState<any[]>([]);
-
-  const [selectedTeam, setSelectedTeam] = useState<any>(null);
-  const [teams, setTeams] = useState<any[]>([]);
-
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Teams mode navigation
+  const [teamView, setTeamView] = useState<TeamView>('grid');
+  const [rosterAbbr, setRosterAbbr] = useState('');
+
   const [loading, setLoading] = useState(false);
 
   if (authLoading) {
@@ -30,9 +33,7 @@ export default function App() {
     );
   }
 
-  if (!user) {
-    return <AuthPage />;
-  }
+  if (!user) return <AuthPage />;
 
   const fetchPlayer = async (name: string) => {
     if (!name.trim()) return;
@@ -49,45 +50,130 @@ export default function App() {
     setLoading(false);
   };
 
-  const fetchTeam = async (name: string) => {
-    if (!name.trim()) return;
+  const fetchPlayerFromRoster = async (name: string) => {
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/team/${encodeURIComponent(name)}`);
-      if (!response.ok) throw new Error('Team not found');
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/player/${encodeURIComponent(name)}`);
+      if (!response.ok) throw new Error('Player not found');
       const data = await response.json();
-      setTeams([data]);
-      setSelectedTeam(data);
+      setSelectedPlayer(data);
+      setTeamView('player');
     } catch (error) {
-      console.error('Failed to fetch team:', error);
+      console.error('Failed to fetch player:', error);
     }
     setLoading(false);
   };
 
   const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      mode === 'players' ? fetchPlayer(searchQuery) : fetchTeam(searchQuery);
-    }
+    if (e.key === 'Enter') fetchPlayer(searchQuery);
   };
 
   const switchMode = (next: Mode) => {
     setMode(next);
     setSearchQuery('');
-    if (next === 'players') { setSelectedTeam(null); setTeams([]); }
-    else { setSelectedPlayer(null); setPlayers([]); }
+    if (next === 'players') {
+      setTeamView('grid');
+    } else {
+      setSelectedPlayer(null);
+      setPlayers([]);
+    }
   };
 
-  const hasData = mode === 'players' ? !!selectedPlayer : !!selectedTeam;
-  const loadingLabel = mode === 'players' ? 'Scouting Player Data...' : 'Loading Team Data...';
-  const placeholder = mode === 'players'
-    ? 'Search player (e.g. Steph Curry)...'
-    : 'Search team (e.g. Thunder, Lakers)...';
+  const renderTeamsContent = () => {
+    if (loading) {
+      return (
+        <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+          <div className="size-10 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
+          <div className="text-orange-500 text-lg animate-pulse font-medium">Loading Player Data...</div>
+        </div>
+      );
+    }
+
+    if (teamView === 'grid') {
+      return (
+        <TeamsGrid
+          onSelectTeam={(abbr) => {
+            setRosterAbbr(abbr);
+            setTeamView('roster');
+          }}
+        />
+      );
+    }
+
+    if (teamView === 'roster') {
+      return (
+        <TeamRoster
+          abbr={rosterAbbr}
+          onSelectPlayer={fetchPlayerFromRoster}
+          onBack={() => setTeamView('grid')}
+        />
+      );
+    }
+
+    // player view
+    return (
+      <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-400">
+        <button
+          onClick={() => setTeamView('roster')}
+          className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm"
+        >
+          <ArrowLeft className="size-4" />
+          Back to roster
+        </button>
+        {selectedPlayer && <StatPrediction player={selectedPlayer} />}
+      </div>
+    );
+  };
+
+  const renderPlayersContent = () => {
+    if (loading) {
+      return (
+        <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+          <div className="size-10 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
+          <div className="text-orange-500 text-lg animate-pulse font-medium">Scouting Player Data...</div>
+        </div>
+      );
+    }
+
+    if (!selectedPlayer) {
+      return (
+        <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
+          <div className="bg-gray-900 p-6 rounded-full border border-gray-800">
+            <Search className="size-16 text-gray-700" />
+          </div>
+          <div className="space-y-2 max-w-md">
+            <h2 className="text-3xl text-white font-bold">Ready to Analyze?</h2>
+            <p className="text-gray-400 text-lg">
+              Search for an NBA player above to view their recent game stats, trends, and AI-powered performance predictions.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="lg:col-span-1">
+          <PlayerStatsColumn
+            players={players}
+            selectedPlayer={selectedPlayer}
+            onSelectPlayer={setSelectedPlayer}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+          />
+        </div>
+        <div className="lg:col-span-2">
+          <StatPrediction player={selectedPlayer} />
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-950">
       {/* Header */}
       <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-10">
-        <div className="container mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="container mx-auto px-6 py-4 flex flex-wrap justify-between items-center gap-4">
           <div className="flex items-center gap-3">
             <TrendingUp className="size-8 text-orange-500" />
             <h1 className="text-2xl text-white font-bold tracking-tight">NBA Betting Analysis</h1>
@@ -126,71 +212,26 @@ export default function App() {
             </button>
           </div>
 
-          {/* Search Bar */}
-          <div className="relative w-full md:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
-            <input
-              type="text"
-              placeholder={placeholder}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={handleSearch}
-              className="w-full bg-gray-950 border border-gray-800 rounded-lg pl-10 pr-4 py-2.5 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-all"
-            />
-          </div>
+          {/* Search bar — players mode only */}
+          {mode === 'players' && (
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
+              <input
+                type="text"
+                placeholder="Search player (e.g. Steph Curry)..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={handleSearch}
+                className="w-full bg-gray-950 border border-gray-800 rounded-lg pl-10 pr-4 py-2.5 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-all"
+              />
+            </div>
+          )}
         </div>
       </header>
 
       {/* Main Content */}
       <div className="container mx-auto px-6 py-8">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-            <div className="size-10 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
-            <div className="text-orange-500 text-lg animate-pulse font-medium">{loadingLabel}</div>
-          </div>
-        ) : !hasData ? (
-          <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
-            <div className="bg-gray-900 p-6 rounded-full border border-gray-800">
-              <BarChart3 className="size-16 text-gray-700" />
-            </div>
-            <div className="space-y-2 max-w-md">
-              <h2 className="text-3xl text-white font-bold">Ready to Analyze?</h2>
-              <p className="text-gray-400 text-lg">
-                {mode === 'players'
-                  ? 'Search for an NBA player above to view their recent game stats, trends, and AI-powered performance predictions.'
-                  : 'Search for an NBA team above (e.g. "Thunder", "LAL", "Golden State") to view team stats and AI-powered game predictions.'}
-              </p>
-            </div>
-          </div>
-        ) : mode === 'players' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="lg:col-span-1">
-              <PlayerStatsColumn
-                players={players}
-                selectedPlayer={selectedPlayer}
-                onSelectPlayer={setSelectedPlayer}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-              />
-            </div>
-            <div className="lg:col-span-2">
-              <StatPrediction player={selectedPlayer} />
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="lg:col-span-1">
-              <TeamStatsColumn
-                teams={teams}
-                selectedTeam={selectedTeam}
-                onSelectTeam={setSelectedTeam}
-              />
-            </div>
-            <div className="lg:col-span-2">
-              <TeamPrediction team={selectedTeam} />
-            </div>
-          </div>
-        )}
+        {mode === 'players' ? renderPlayersContent() : renderTeamsContent()}
       </div>
     </div>
   );
