@@ -84,7 +84,15 @@ HAS_TOV = 'TOV' in nba_data_df.columns
 def _refresh_player_data():
     """Fetch new games from NBA API, upsert to Supabase, reload in-memory dataframe."""
     global nba_data_df, HAS_TOV, _schedule_cache, _schedule_cache_day
-    print("[scheduler] Starting daily data refresh...")
+
+    # Skip during offseason — no games July through September
+    if 7 <= _date.today().month <= 9:
+        print("[scheduler] Offseason — skipping refresh.")
+        return
+
+    season = _current_season()
+    print(f"[scheduler] Starting daily data refresh for {season}...")
+
     _custom_headers = {
         'Accept': '*/*',
         'Accept-Encoding': 'gzip, deflate, br',
@@ -98,9 +106,26 @@ def _refresh_player_data():
         'x-nba-stats-token': 'true',
     }
     try:
-        from nba_api.stats.endpoints import LeagueGameLog
-        from_date = pd.to_datetime(nba_data_df['GAME_DATE'].max()).strftime('%m/%d/%Y')
+        # Detect season rollover: clear Supabase and reset if season changed
+        if not nba_data_df.empty:
+            max_date = pd.to_datetime(nba_data_df['GAME_DATE'].max())
+            prev_start = max_date.year if max_date.month >= 10 else max_date.year - 1
+            prev_season = f"{prev_start}-{str(prev_start + 1)[2:]}"
+            if prev_season != season:
+                print(f"[scheduler] Season rollover {prev_season} → {season}. Clearing old data...")
+                _sb.table('nba_player_game_logs').delete().neq('player_id', 0).execute()
+                nba_data_df = pd.DataFrame(columns=_COLS)
+                _schedule_cache = None
+                _schedule_cache_day = None
 
+        # Start from Oct 1 of new season if table is empty, else from last known date
+        if nba_data_df.empty:
+            season_start_year = int(season.split('-')[0])
+            from_date = f"10/01/{season_start_year}"
+        else:
+            from_date = pd.to_datetime(nba_data_df['GAME_DATE'].max()).strftime('%m/%d/%Y')
+
+        from nba_api.stats.endpoints import LeagueGameLog
         all_new = []
         for s_type in ['Regular Season', 'PlayIn', 'Playoffs']:
             for attempt in range(3):
@@ -108,7 +133,7 @@ def _refresh_player_data():
                     time.sleep(3)
                     logs = LeagueGameLog(
                         date_from_nullable=from_date,
-                        season='2025-26',
+                        season=season,
                         player_or_team_abbreviation='P',
                         season_type_all_star=s_type,
                         headers=_custom_headers,
@@ -168,6 +193,14 @@ _NBA_HEADERS = {
 
 from datetime import date as _date
 
+
+def _current_season() -> str:
+    """Return NBA season string for today, e.g. '2025-26'. Season starts in October."""
+    today = _date.today()
+    start_year = today.year if today.month >= 10 else today.year - 1
+    return f"{start_year}-{str(start_year + 1)[2:]}"
+
+
 _schedule_cache: pd.DataFrame | None = None
 _schedule_cache_day: str | None = None
 
@@ -181,7 +214,7 @@ def _fetch_schedule() -> pd.DataFrame | None:
     try:
         from nba_api.stats.endpoints import LeagueSchedule
         time.sleep(1)
-        sched = LeagueSchedule(league_id='00', season_year='2025-26', headers=_NBA_HEADERS)
+        sched = LeagueSchedule(league_id='00', season_year=_current_season(), headers=_NBA_HEADERS)
         df = sched.get_data_frames()[0]
         # Normalise to lowercase so column detection is case-insensitive
         df.columns = [c.lower() for c in df.columns]
@@ -196,9 +229,8 @@ def _fetch_schedule() -> pd.DataFrame | None:
 
 def _parse_dates(series: pd.Series) -> pd.Series:
     """Parse a date series, stripping timezone info and normalising to midnight."""
-    parsed = pd.to_datetime(series, errors='coerce', utc=False)
-    if parsed.dt.tz is not None:
-        parsed = parsed.dt.tz_localize(None)
+    parsed = pd.to_datetime(series, errors='coerce', utc=True)
+    parsed = parsed.dt.tz_convert(None)
     return parsed.dt.normalize()
 
 
@@ -330,7 +362,7 @@ def get_team_roster(abbr: str):
     try:
         from nba_api.stats.endpoints import CommonTeamRoster
         time.sleep(1)
-        roster = CommonTeamRoster(team_id=team_id, season='2025-26')
+        roster = CommonTeamRoster(team_id=team_id, season=_current_season())
         df = roster.get_data_frames()[0]
 
         players = []

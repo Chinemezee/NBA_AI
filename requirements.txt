@@ -1,13 +1,14 @@
 apscheduler==3.10.4
 fastapi
-gunicorn
 google-genai
+httpx==0.28.1
 nba_api
 numpy
 pandas
 python-dotenv
 pytz
 requests
-supabase
+supabase==2.22.4
 uvicorn
 tzdata
+yarl
