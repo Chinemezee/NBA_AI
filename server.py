@@ -176,7 +176,7 @@ def _refresh_player_data():
 
 from apscheduler.schedulers.background import BackgroundScheduler
 _scheduler = BackgroundScheduler(timezone='UTC')
-_scheduler.add_job(_refresh_player_data, 'cron', hour=9, minute=0)  # 9 AM UTC = ~4-5 AM ET
+_scheduler.add_job(_refresh_player_data, 'cron', hour=9, minute=0, misfire_grace_time=3600)  # 9 AM UTC = ~10 AM WAT
 _scheduler.start()
 
 _NBA_HEADERS = {
@@ -336,6 +336,12 @@ TEAM_IDS = {
 @app.get("/health")
 def health():
     return {"status": "ok", "rows": len(nba_data_df)}
+
+
+@app.get("/refresh")
+def manual_refresh():
+    _refresh_player_data()
+    return {"status": "done", "rows": len(nba_data_df)}
 
 
 @app.get("/teams")
