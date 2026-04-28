@@ -10,5 +10,6 @@ pytz
 requests
 supabase==2.22.4
 uvicorn
+gunicorn
 tzdata
 yarl
