@@ -4,7 +4,7 @@ import { AuthPage } from './components/AuthPage';
 import { PlayerStatsColumn } from '@/app/components/PlayerStatsColumn';
 import { StatPrediction } from '@/app/components/StatPrediction';
 import { TeamsGrid } from '@/app/components/TeamsGrid';
-import { TeamRoster } from '@/app/components/TeamRoster';
+import { TeamRoster, type RosterPlayer } from '@/app/components/TeamRoster';
 import { TeamPrediction } from '@/app/components/TeamPrediction';
 import { TrendingUp, Search, User, Shield, ArrowLeft } from 'lucide-react';
 
@@ -52,13 +52,20 @@ export default function App() {
     setLoading(false);
   };
 
-  const fetchPlayerFromRoster = async (name: string) => {
+  const fetchPlayerFromRoster = async (rosterPlayer: RosterPlayer) => {
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/player/${encodeURIComponent(name)}`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/player/${encodeURIComponent(rosterPlayer.name)}`);
       if (!response.ok) throw new Error('Player not found');
       const data = await response.json();
-      setSelectedPlayer(data);
+      // CommonPlayerInfo is often blocked on cloud servers; fill gaps from roster data
+      setSelectedPlayer({
+        ...data,
+        position: (data.position && data.position !== '—') ? data.position : rosterPlayer.position,
+        height: data.height || rosterPlayer.height,
+        weight: data.weight || rosterPlayer.weight,
+        jersey: data.jersey || rosterPlayer.number,
+      });
       setTeamView('player');
     } catch (error) {
       console.error('Failed to fetch player:', error);

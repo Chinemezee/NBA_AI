@@ -344,6 +344,14 @@ def manual_refresh():
     return {"status": "done", "rows": len(nba_data_df)}
 
 
+@app.get("/reload")
+def reload_data():
+    global nba_data_df, HAS_TOV
+    nba_data_df = _load_from_supabase()
+    HAS_TOV = 'TOV' in nba_data_df.columns
+    return {"status": "done", "rows": len(nba_data_df)}
+
+
 @app.get("/teams")
 def get_all_teams():
     teams = [

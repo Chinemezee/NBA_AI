@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Loader2, TrendingUp } from 'lucide-react';
 import { PlayerPhoto } from './PlayerPhoto';
 
-type RosterPlayer = {
+export type RosterPlayer = {
   id: number;
   name: string;
   number: string;
@@ -21,7 +21,7 @@ type RosterData = {
 
 type Props = {
   abbr: string;
-  onSelectPlayer: (name: string) => void;
+  onSelectPlayer: (player: RosterPlayer) => void;
   onBack: () => void;
   onPredict: () => void;
 };
@@ -112,7 +112,7 @@ export function TeamRoster({ abbr, onSelectPlayer, onBack, onPredict }: Props) {
         {roster.players.map(player => (
           <button
             key={player.id}
-            onClick={() => onSelectPlayer(player.name)}
+            onClick={() => onSelectPlayer(player)}
             className="bg-gray-900 border border-gray-800 hover:border-orange-500/50 hover:bg-gray-800 rounded-xl p-4 text-left transition-all group"
           >
             <div className="flex items-start gap-3">
