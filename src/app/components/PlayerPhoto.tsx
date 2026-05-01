@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User } from 'lucide-react';
 
 type Props = {
@@ -10,6 +10,7 @@ type Props = {
 
 export function PlayerPhoto({ playerId, name, size = 'sm', className = '' }: Props) {
   const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [playerId]);
 
   const base = size === 'lg'
     ? 'size-20 rounded-full overflow-hidden bg-gray-800 border border-gray-700 flex-shrink-0 flex items-center justify-center'

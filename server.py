@@ -535,7 +535,30 @@ def get_player_stats(name: str):
                 "experience": str(pi.get('SEASON_EXP', '')).strip(),
             }
         except Exception as pe:
-            print(f"Profile fetch failed for {player_id}: {pe}")
+            print(f"CommonPlayerInfo failed for {player_id}: {pe}")
+
+        # Fallback: try CommonTeamRoster for height/weight/position/jersey
+        if not profile:
+            try:
+                from nba_api.stats.endpoints import CommonTeamRoster
+                team_id = TEAM_IDS.get(team_abbr)
+                if team_id:
+                    time.sleep(0.6)
+                    roster = CommonTeamRoster(team_id=team_id, season=_current_season())
+                    df_roster = roster.get_data_frames()[0]
+                    pr = df_roster[df_roster['PLAYER_ID'] == player_id]
+                    if not pr.empty:
+                        r = pr.iloc[0]
+                        profile = {
+                            "height":     str(r.get('HEIGHT', '')).strip(),
+                            "weight":     str(r.get('WEIGHT', '')).strip(),
+                            "position":   str(r.get('POSITION', '')).strip(),
+                            "jersey":     str(r.get('NUM', '')).strip(),
+                            "age":        None,
+                            "experience": str(r.get('EXP', '')).strip(),
+                        }
+            except Exception as re:
+                print(f"CommonTeamRoster fallback failed for {player_id}: {re}")
 
         return {
             "id":         player_id,
