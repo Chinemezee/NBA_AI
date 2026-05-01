@@ -537,7 +537,10 @@ def get_player_stats(name: str):
         except Exception as pe:
             print(f"CommonPlayerInfo failed for {player_id}: {pe}")
 
-        # Fallback: try CommonTeamRoster for height/weight/position/jersey
+        # Fallback: try CommonTeamRoster for height/weight/position/jersey.
+        # Also match by name (not player_id) because Supabase game-log IDs can
+        # differ from CommonTeamRoster IDs; the roster ID is the one the CDN
+        # uses for headshots, so update player_id if we find a match.
         if not profile:
             try:
                 from nba_api.stats.endpoints import CommonTeamRoster
@@ -546,9 +549,17 @@ def get_player_stats(name: str):
                     time.sleep(0.6)
                     roster = CommonTeamRoster(team_id=team_id, season=_current_season())
                     df_roster = roster.get_data_frames()[0]
-                    pr = df_roster[df_roster['PLAYER_ID'] == player_id]
+                    player_name_str = str(nba_players.iloc[0]["PLAYER_NAME"])
+                    # Match by name so we work even when the two ID systems differ
+                    pr = df_roster[df_roster['PLAYER'].str.lower() == player_name_str.lower()]
+                    if pr.empty:
+                        pr = df_roster[df_roster['PLAYER'].str.contains(player_name_str, case=False, na=False)]
                     if not pr.empty:
                         r = pr.iloc[0]
+                        # Use the roster's player ID — it's what the NBA CDN uses for photos
+                        roster_pid = r.get('PLAYER_ID')
+                        if roster_pid and not pd.isna(roster_pid):
+                            player_id = int(roster_pid)
                         profile = {
                             "height":     str(r.get('HEIGHT', '')).strip(),
                             "weight":     str(r.get('WEIGHT', '')).strip(),

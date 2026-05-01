@@ -58,9 +58,12 @@ export default function App() {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/player/${encodeURIComponent(rosterPlayer.name)}`);
       if (!response.ok) throw new Error('Player not found');
       const data = await response.json();
-      // CommonPlayerInfo is often blocked on cloud servers; fill gaps from roster data
+      // CommonPlayerInfo is often blocked on cloud servers; fill gaps from roster data.
+      // Use rosterPlayer.id for the photo — CommonTeamRoster IDs are confirmed to work
+      // with the NBA CDN, while Supabase game-log IDs sometimes don't.
       setSelectedPlayer({
         ...data,
+        id: rosterPlayer.id || data.id,
         position: (data.position && data.position !== '—') ? data.position : rosterPlayer.position,
         height: data.height || rosterPlayer.height,
         weight: data.weight || rosterPlayer.weight,
